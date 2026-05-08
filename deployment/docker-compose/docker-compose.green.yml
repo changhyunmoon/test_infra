@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  api-server-green:
+    image: ${DOCKERHUB_USERNAME}/${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}
+    container_name: api-server-green
+    ports:
+      - "8082:8080" # EC2의 8082 포트를 컨테이너의 8080으로 연결
+    restart: always
+    networks:
+      - docker_compose_backend
+
+networks:
+  docker_compose_backend:
+    external: true
