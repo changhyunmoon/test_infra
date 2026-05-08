@@ -1,5 +1,5 @@
 # 빌드 단계
-FROM eclipse-temurin:17-jdk-alpine AS build
+FROM eclipse-temurin:17-jdk-alpine AS builder
 WORKDIR /back
 COPY gradlew .
 COPY gradle gradle
@@ -37,9 +37,9 @@ WORKDIR /app
 ARG DEPENDENCY=/workspace/build/dependency
 
 # ★ 핵심 3: 변동성이 적은 순서대로 레이어를 복사 (앱 실행 속도 및 배포 최적화)
-COPY --from=build ${DEPENDENCY}/BOOT-INF/lib /app/lib
-COPY --from=build ${DEPENDENCY}/META-INF /app/META-INF
-COPY --from=build ${DEPENDENCY}/BOOT-INF/classes /app
+COPY --from=builder ${DEPENDENCY}/BOOT-INF/lib /app/lib
+COPY --from=builder ${DEPENDENCY}/META-INF /app/META-INF
+COPY --from=builder ${DEPENDENCY}/BOOT-INF/classes /app
 
 ENV SERVER_PORT=8080
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError -Duser.timezone=Asia/Seoul"
