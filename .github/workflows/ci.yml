@@ -1,45 +1,49 @@
-name: Docker Build and Push CI
+name: CI
 
 on:
   push:
-    branches: [ "main" ] # main 브랜치에 코드가 푸시될 때 작동합니다.
-  pull_request:
-    branches: [ "main" ] # PR을 올렸을 때도 빌드 검증을 하려면 켭니다.
+    branches:
+      - main
 
-# 환경 변수 설정
 env:
-  DOCKER_IMAGE_NAME: my-docker-username
+  DOCKERHUB_REPO: my-dockerhub-username
+  SERVICE_NAME: gateway-service
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+
     steps:
-      - name: 📦 Checkout Repository
-        uses: actions/checkout@v4
+      # 1. 소스코드 체크아웃
+      - name: Checkout source code
+        uses: actions/checkout@v3
 
-      - name: 🐳 Set up Docker Buildx
+      # ★ 핵심 1: BuildKit 활성화 (Dockerfile의 캐시 마운트를 쓰기 위한 필수 조건)
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        # 이전 단계에서 최적화한 Dockerfile의 캐시 기능(BuildKit)을 활성화합니다.
 
-      - name: 🔐 Log in to Docker Hub
-        # PR 상태가 아닐 때만(실제 머지/푸시될 때만) 로그인합니다.
-        if: github.event_name != 'pull_request'
+      # 2. Docker Hub 로그인
+      - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_ACCESSTOKEN }}
 
-      - name: 🚀 Build and Push Docker Image
+      # 3. Git Commit SHA 추출 (태그용)
+      - name: Set Image Version Tag
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      # 4. Docker 빌드 및 푸시 (GHA 캐시 주입)
+      - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
-          # PR일 때는 빌드만 하고 푸시는 하지 않습니다. main 푸시일 때만 푸시합니다.
-          push: ${{ github.event_name != 'pull_request' }}
-          # 태그를 latest와 git 커밋 해시 두 가지로 달아 롤백을 쉽게 만듭니다.
+          push: true
           tags: |
-            ${{ env.DOCKER_IMAGE_NAME }}:latest
-            ${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}
-          # 최적화의 핵심: GitHub Actions 캐시를 활용하여 빌드 속도를 비약적으로 높입니다.
+            ${{ env.DOCKERHUB_REPO }}/${{ env.SERVICE_NAME }}:latest
+            ${{ env.DOCKERHUB_REPO }}/${{ env.SERVICE_NAME }}:${{ steps.vars.outputs.sha_short }}
+          # ★ 핵심 2: GitHub Actions의 저장 공간을 도커 빌드 캐시 저장소로 사용
           cache-from: type=gha
           cache-to: type=gha,mode=max
