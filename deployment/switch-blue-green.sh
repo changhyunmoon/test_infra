@@ -39,7 +39,6 @@ log "🚢 배포 타겟: $TARGET_COLOR (Port: $TARGET_PORT)"
 
 # 3. 새 버전 이미지 Pull
 log "1. $TARGET_COLOR 이미지 Pull..."
-# docker-compose.yml 파일 내에서 변수를 사용하므로 바로 실행
 docker compose -f docker-compose.${TARGET_COLOR}.yml pull
 
 # 4. 새 컨테이너 실행
@@ -88,7 +87,7 @@ log "5. 이전 컨테이너($OLD_COLOR) 정리..."
 docker compose -f docker-compose.${OLD_COLOR}.yml stop || true
 docker compose -f docker-compose.${OLD_COLOR}.yml rm -f || true
 
-# 8. 디스크 공간 확보 (참고 스크립트의 좋은 기능)
+# 8. 디스크 공간 확보
 log "6. 불필요한 이미지 및 빌드 캐시 정리..."
 docker image prune -af
 docker builder prune -f
