@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  DOCKERHUB_REPO: my-dockerhub-username
+  DOCKERHUB_REPO: mch1999
   SERVICE_NAME: gateway-service
 
 jobs:
