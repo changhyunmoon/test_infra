@@ -1,0 +1,45 @@
+name: Docker Build and Push CI
+
+on:
+  push:
+    branches: [ "main" ] # main 브랜치에 코드가 푸시될 때 작동합니다.
+  pull_request:
+    branches: [ "main" ] # PR을 올렸을 때도 빌드 검증을 하려면 켭니다.
+
+# 환경 변수 설정
+env:
+  DOCKER_IMAGE_NAME: my-docker-username
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📦 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🐳 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        # 이전 단계에서 최적화한 Dockerfile의 캐시 기능(BuildKit)을 활성화합니다.
+
+      - name: 🔐 Log in to Docker Hub
+        # PR 상태가 아닐 때만(실제 머지/푸시될 때만) 로그인합니다.
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_ACCESSTOKEN }}
+
+      - name: 🚀 Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          # PR일 때는 빌드만 하고 푸시는 하지 않습니다. main 푸시일 때만 푸시합니다.
+          push: ${{ github.event_name != 'pull_request' }}
+          # 태그를 latest와 git 커밋 해시 두 가지로 달아 롤백을 쉽게 만듭니다.
+          tags: |
+            ${{ env.DOCKER_IMAGE_NAME }}:latest
+            ${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}
+          # 최적화의 핵심: GitHub Actions 캐시를 활용하여 빌드 속도를 비약적으로 높입니다.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
