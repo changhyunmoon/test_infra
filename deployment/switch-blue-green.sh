@@ -12,7 +12,9 @@ NETWORK_NAME="docker_compose_backend"
 cd "$BASE_DIR"
 
 if [ -f .env ]; then
+    set -a
     source .env
+    set +a
 else
     echo "❌ .env 파일이 없습니다. 배포를 중단합니다."
     exit 1
