@@ -1,13 +1,11 @@
+# 빌드 단계
+FROM eclipse-temurin:17-jdk-alpine AS builder
+WORKDIR /back
+COPY gradlew .
+COPY gradle gradle
 
-# ==========================================
-# 1. Build Stage
-# ==========================================
-FROM eclipse-temurin:17-jdk-jammy AS build
-WORKDIR /workspace
+RUN chmod +x ./gradlew
 
-# 의존성 파일만 먼저 복사하여 레이어 캐시 히트율 극대화
-COPY gradlew ./
-COPY gradle/ ./gradle/
 COPY build.gradle settings.gradle ./
 RUN chmod +x gradlew
 
