@@ -28,13 +28,6 @@ jobs:
           mkdir -p api-server/src/main/resources
           echo "${{ secrets.APPLICATION_PROD }}" | base64 --decode > api-server/src/main/resources/application-prod.yml
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x ./gradlew
-
-      - name: Build with Gradle
-        working-directory: ./
-        run: ./gradlew clean :api-server:build -x test
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 

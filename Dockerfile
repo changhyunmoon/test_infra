@@ -43,26 +43,12 @@ COPY --from=build ${DEPENDENCY}/BOOT-INF/lib /app/lib
 COPY --from=build ${DEPENDENCY}/META-INF /app/META-INF
 COPY --from=build ${DEPENDENCY}/BOOT-INF/classes /app
 
-ENV SERVER_PORT=8000
+ENV SERVER_PORT=8080
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError -Duser.timezone=Asia/Seoul"
-EXPOSE 8000
+EXPOSE 8080
 
-# 분리된 클래스패스를 이용해 애플리케이션 실행
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -Dserver.port=$SERVER_PORT -cp app:app/lib/* com.example.YourApplicationName"]
-# 주의: com.example.YourApplicationName 부분은 실제 메인 클래스 경로로 변경해주세요.
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -Dserver.port=$SERVER_PORT -cp /app:/app/lib/* com.team6.project3th.Project3thApplication"]
 
 
 
-## 기존 방식
-#FROM eclipse-temurin:17-jdk-jammy
-#WORKDIR /app
-#
-#  # 1. 무지성으로 프로젝트의 모든 코드를 한 번에 복사
-#COPY . .
-#
-#  # 2. 컨테이너 내부에서 바로 빌드 진행 (매번 모든 라이브러리를 새로 다운받음)
-#RUN chmod +x gradlew
-#RUN ./gradlew clean build -x test
-#
-#  # 4. 빌드된 JAR를 그냥 바로 실행
-#ENTRYPOINT ["java", "-jar", "build/libs/gateway-service.jar"]
+
