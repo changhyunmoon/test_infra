@@ -34,7 +34,7 @@ RUN useradd -ms /bin/bash spring
 USER spring:spring
 WORKDIR /app
 
-ARG DEPENDENCY=/workspace/build/dependency
+ARG DEPENDENCY=/back/build/dependency
 
 # ★ 핵심 3: 변동성이 적은 순서대로 레이어를 복사 (앱 실행 속도 및 배포 최적화)
 COPY --from=builder ${DEPENDENCY}/BOOT-INF/lib /app/lib
