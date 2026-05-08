@@ -15,8 +15,8 @@ RUN ./gradlew clean bootJar --no-daemon
 # JAR 레이어 추출 단계
 FROM eclipse-temurin:17-jre-alpine AS extractor
 WORKDIR /back
-COPY --from=builder /back/build/libs/weddy-0.0.1-SNAPSHOT.jar weddy.jar
-RUN java -Djarmode=layertools -jar weddy.jar extract
+COPY --from=builder /back/build/libs/app.jar weddy.jar
+RUN java -Djarmode=layertools -jar app.jar extract
 
 
 # 실행 단계
