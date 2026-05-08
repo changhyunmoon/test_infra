@@ -1,0 +1,101 @@
+name: CI-CD Workflow
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  DOCKER_IMAGE_NAME: api-server
+  DOCKER_IMAGE_TAG: latest
+
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Decode and Create application-prod.yml
+        run: |
+          mkdir -p api-server/src/main/resources
+          echo "${{ secrets.APPLICATION_PROD }}" | base64 --decode > api-server/src/main/resources/application-prod.yml
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Build with Gradle
+        working-directory: ./
+        run: ./gradlew clean :api-server:build -x test
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_ACCESSTOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ env.DOCKER_IMAGE_TAG }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}
+          #Github Actions 전용 캐시
+          cache-from: type=gha
+          #이전 빌드에서 만들어둔 캐시 가져와서 사용
+          cache-to: type=gha,mode=max
+
+#CD 로직
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env file
+        run: |
+          mkdir -p deployment
+          echo "DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}" >> deployment/.env
+          echo "DOCKER_IMAGE_NAME=${{ env.DOCKER_IMAGE_NAME }}" >> deployment/.env
+          echo "DOCKER_IMAGE_TAG=${{ github.sha }}" >> deployment/.env
+
+      - name: Verify deployment files
+        run: |
+          echo "=== deployment files ==="
+          find deployment -type f | sort
+
+      - name: Copy deployment files to EC2
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "deployment/**"
+          target: "/home/ubuntu/deploy"
+          strip_components: 1
+          overwrite: true
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ubuntu/deploy 
+            
+            chmod +x switch-blue-green.sh
+            ./switch-blue-green.sh
