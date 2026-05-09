@@ -35,7 +35,11 @@ fi
 # Prometheus / Grafana 최초 1회 실행
 MONITORING_COMPOSE_FILE="$COMPOSE_DIR/docker-compose.monitoring.yml"
 
-if ! docker ps --format '{{.Names}}' | grep -q '^prometheus$'; then
+is_container_running() {
+    [ "$(docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null || echo false)" = "true" ]
+}
+
+if ! is_container_running prometheus || ! is_container_running grafana; then
     log "📊 Prometheus/Grafana가 실행 중이 아닙니다. 모니터링 컨테이너를 시작합니다."
     docker compose -f "$MONITORING_COMPOSE_FILE" up -d
 else
