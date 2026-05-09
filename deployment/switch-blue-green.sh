@@ -86,11 +86,14 @@ for i in $(seq 1 $MAX_RETRIES); do
         break
     fi
 
-    if [ $i -eq $MAX_RETRIES ]; then
-        log "❌ 헬스체크 실패. 새 컨테이너를 중지하고 배포를 취소합니다."
-        docker compose -f "$COMPOSE_DIR/docker-compose.${TARGET_COLOR}.yml" stop
-        exit 1
-    fi
+  if [ $i -eq $MAX_RETRIES ]; then
+      log "❌ 헬스체크 실패. 새 컨테이너 로그를 출력합니다."
+      docker logs "api-server-${TARGET_COLOR}" --tail=200 || true
+
+      log "❌ 새 컨테이너를 중지하고 배포를 취소합니다."
+      docker compose -f "$COMPOSE_DIR/docker-compose.${TARGET_COLOR}.yml" stop
+      exit 1
+  fi
 done
 
 # 6. Nginx 설정 전환
