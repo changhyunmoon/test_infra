@@ -39,11 +39,14 @@ is_container_running() {
     [ "$(docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null || echo false)" = "true" ]
 }
 
-if ! is_container_running prometheus || ! is_container_running grafana; then
-    log "📊 Prometheus/Grafana가 실행 중이 아닙니다. 모니터링 컨테이너를 시작합니다."
+if ! is_container_running prometheus || \
+   ! is_container_running grafana || \
+   ! is_container_running loki || \
+   ! is_container_running promtail; then
+    log "📊 모니터링 컨테이너 중 실행되지 않은 항목이 있습니다. Prometheus/Grafana/Loki/Promtail을 시작합니다."
     docker compose -f "$MONITORING_COMPOSE_FILE" up -d
 else
-    log "📊 Prometheus/Grafana가 이미 실행 중입니다. 모니터링 컨테이너 실행을 건너뜁니다."
+    log "📊 Prometheus/Grafana/Loki/Promtail이 이미 실행 중입니다. 모니터링 컨테이너 실행을 건너뜁니다."
 fi
 
 # 2. Blue/Green 상태 결정
