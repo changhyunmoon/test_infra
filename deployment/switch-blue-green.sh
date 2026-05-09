@@ -5,10 +5,16 @@ set -e
 
 # 1. 환경 설정 및 .env 로드
 BASE_DIR="/home/ubuntu/deploy"
+COMPOSE_DIR="$BASE_DIR/docker-compose"
+NGINX_DIR="$BASE_DIR/nginx"
+NETWORK_NAME="docker_compose_backend"
+
 cd "$BASE_DIR"
 
 if [ -f .env ]; then
+    set -a
     source .env
+    set +a
 else
     echo "❌ .env 파일이 없습니다. 배포를 중단합니다."
     exit 1
@@ -20,6 +26,11 @@ log() {
 }
 
 log "🚀 --- 무중단 배포 프로세스 시작 (Tag: $DOCKER_IMAGE_TAG) ---"
+
+if ! docker network inspect "$NETWORK_NAME" >/dev/null 2>&1; then
+    log "Docker network '$NETWORK_NAME' 없음. 새로 생성합니다."
+    docker network create "$NETWORK_NAME"
+fi
 
 # 2. Blue/Green 상태 결정
 # api-server-blue 컨테이너가 실행 중인지 확인
@@ -39,21 +50,18 @@ log "🚢 배포 타겟: $TARGET_COLOR (Port: $TARGET_PORT)"
 
 # 3. 새 버전 이미지 Pull
 log "1. $TARGET_COLOR 이미지 Pull..."
-docker compose -f docker-compose.${TARGET_COLOR}.yml pull
+docker compose -f "$COMPOSE_DIR/docker-compose.${TARGET_COLOR}.yml" pull
 
 # 4. 새 컨테이너 실행
 log "2. $TARGET_COLOR 컨테이너 실행..."
-docker compose -f docker-compose.${TARGET_COLOR}.yml up -d
+docker compose -f "$COMPOSE_DIR/docker-compose.${TARGET_COLOR}.yml" up -d
 
-# 5. 헬스체크 (Spring Actuator)
-# 참고하신 스크립트처럼 반복문을 통해 안정적으로 체크합니다.
+# 5. 헬스체크
 MAX_RETRIES=15
 for i in $(seq 1 $MAX_RETRIES); do
     log "3. $TARGET_COLOR 헬스체크 중... ($i/$MAX_RETRIES)"
     sleep 5
 
-    # Spring Boot Actuator 또는 커스텀 헬스체크 경로
-    # /api/health 가 없다면 /api/actuator/health 등으로 수정하세요.
     HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:$TARGET_PORT/api/health || true)
 
     if [ "$HTTP_STATUS" -eq 200 ]; then
@@ -63,7 +71,7 @@ for i in $(seq 1 $MAX_RETRIES); do
 
     if [ $i -eq $MAX_RETRIES ]; then
         log "❌ 헬스체크 실패. 새 컨테이너를 중지하고 배포를 취소합니다."
-        docker compose -f docker-compose.${TARGET_COLOR}.yml stop
+        docker compose -f "$COMPOSE_DIR/docker-compose.${TARGET_COLOR}.yml" stop
         exit 1
     fi
 done
@@ -71,11 +79,15 @@ done
 # 6. Nginx 설정 전환
 log "4. Nginx 설정 교체 및 Reload..."
 # 이전에 만든 nginx-blue.conf 또는 nginx-green.conf를 적용
-sudo cp nginx-${TARGET_COLOR}.conf /etc/nginx/sites-available/default
+sudo cp "$NGINX_DIR/nginx-${TARGET_COLOR}.conf" /etc/nginx/sites-available/default
 
 # Nginx 문법 검사 후 리로드
 if sudo nginx -t; then
-    sudo systemctl reload nginx
+    if sudo systemctl is-active --quiet nginx; then
+        sudo systemctl reload nginx
+    else
+        sudo systemctl start nginx
+    fi
     log "✅ Nginx 트래픽 전환 완료!"
 else
     log "❌ Nginx 설정 오류 발생. 배포를 중단합니다."
@@ -84,8 +96,8 @@ fi
 
 # 7. 이전 컨테이너 정리
 log "5. 이전 컨테이너($OLD_COLOR) 정리..."
-docker compose -f docker-compose.${OLD_COLOR}.yml stop || true
-docker compose -f docker-compose.${OLD_COLOR}.yml rm -f || true
+docker compose -f "$COMPOSE_DIR/docker-compose.${OLD_COLOR}.yml" stop || true
+docker compose -f "$COMPOSE_DIR/docker-compose.${OLD_COLOR}.yml" rm -f || true
 
 # 8. 디스크 공간 확보
 log "6. 불필요한 이미지 및 빌드 캐시 정리..."

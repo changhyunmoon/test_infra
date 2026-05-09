@@ -4,6 +4,8 @@ services:
   api-server-blue:
     image: ${DOCKERHUB_USERNAME}/${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}
     container_name: api-server-blue
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
     ports:
       - "8081:8080" # EC2의 8081 포트를 컨테이너의 8080으로 연결
     restart: always
