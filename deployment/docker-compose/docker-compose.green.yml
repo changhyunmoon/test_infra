@@ -10,8 +10,8 @@ services:
       - "8082:8080" # EC2의 8082 포트를 컨테이너의 8080으로 연결
     restart: always
     networks:
-      - docker_compose_backend
+      - api-server-network
 
 networks:
-  docker_compose_backend:
+  api-server-network:
     external: true

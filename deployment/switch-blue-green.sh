@@ -7,7 +7,7 @@ set -e
 BASE_DIR="/home/ubuntu/deploy"
 COMPOSE_DIR="$BASE_DIR/docker-compose"
 NGINX_DIR="$BASE_DIR/nginx"
-NETWORK_NAME="docker_compose_backend"
+NETWORK_NAME="api-server-network"
 
 cd "$BASE_DIR"
 
@@ -30,6 +30,16 @@ log "🚀 --- 무중단 배포 프로세스 시작 (Tag: $DOCKER_IMAGE_TAG) ---"
 if ! docker network inspect "$NETWORK_NAME" >/dev/null 2>&1; then
     log "Docker network '$NETWORK_NAME' 없음. 새로 생성합니다."
     docker network create "$NETWORK_NAME"
+fi
+
+# Prometheus / Grafana 최초 1회 실행
+MONITORING_COMPOSE_FILE="$COMPOSE_DIR/docker-compose.monitoring.yml"
+
+if ! docker ps --format '{{.Names}}' | grep -q '^prometheus$'; then
+    log "📊 Prometheus/Grafana가 실행 중이 아닙니다. 모니터링 컨테이너를 시작합니다."
+    docker compose -f "$MONITORING_COMPOSE_FILE" up -d
+else
+    log "📊 Prometheus/Grafana가 이미 실행 중입니다. 모니터링 컨테이너 실행을 건너뜁니다."
 fi
 
 # 2. Blue/Green 상태 결정

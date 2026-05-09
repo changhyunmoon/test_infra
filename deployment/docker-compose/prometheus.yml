@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'api-server-blue'
+    metrics_path: '/api/actuator/prometheus'
+    static_configs:
+      - targets: ['api-server-blue:8080']
+
+  - job_name: 'api-server-green'
+    metrics_path: '/api/actuator/prometheus'
+    static_configs:
+      - targets: ['api-server-green:8080']
