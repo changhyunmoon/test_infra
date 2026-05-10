@@ -8,6 +8,7 @@ BASE_DIR="/home/ubuntu/deploy"
 COMPOSE_DIR="$BASE_DIR/docker-compose"
 NGINX_DIR="$BASE_DIR/nginx"
 NETWORK_NAME="api-server-network"
+ENTRY_PORT=8080
 
 cd "$BASE_DIR"
 
@@ -113,6 +114,17 @@ else
     log "❌ Nginx 설정 오류 발생. 배포를 중단합니다."
     exit 1
 fi
+
+ENTRY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:$ENTRY_PORT/health || true)
+if [ "$ENTRY_STATUS" -ne 200 ]; then
+    log "❌ Nginx 전환 후 진입점 헬스체크 실패. 이전 설정으로 롤백합니다. (status=$ENTRY_STATUS)"
+    sudo cp "$NGINX_DIR/nginx-${OLD_COLOR}.conf" /etc/nginx/sites-available/default
+    sudo nginx -t && sudo systemctl reload nginx
+    docker compose -f "$COMPOSE_DIR/docker-compose.${TARGET_COLOR}.yml" stop
+    exit 1
+fi
+
+log "✅ 진입점 헬스체크 성공! (http://127.0.0.1:$ENTRY_PORT/health)"
 
 # 7. 이전 컨테이너 정리
 log "5. 이전 컨테이너($OLD_COLOR) 정리..."
