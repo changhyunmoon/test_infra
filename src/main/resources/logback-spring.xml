@@ -17,7 +17,7 @@
         </encoder>
     </appender>
 
-    <!--    끄고 싶으면 level을 OFF로-->
+    <!-- Set level to OFF to disable SQL/request DB summary logs. -->
     <logger name="SQL_LOG" level="INFO" additivity="true"/>
     <logger name="HTTP_DB_SUMMARY" level="INFO" additivity="true"/>
 
@@ -25,4 +25,3 @@
         <appender-ref ref="CONSOLE"/>
     </root>
 </configuration>
-

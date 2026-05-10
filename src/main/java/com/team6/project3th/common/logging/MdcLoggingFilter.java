@@ -1,5 +1,6 @@
 package com.team6.project3th.common.logging;
 
+import com.team6.project3th.common.metrics.DbMetricsRecorder;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,6 +23,12 @@ public class MdcLoggingFilter extends OncePerRequestFilter {
     private static final String TEST_RUN_ID_HEADER = "X-Test-Run-Id";
     private static final String SCENARIO_HEADER = "X-Scenario";
     private static final String REQUEST_ID_HEADER = "X-Request-Id";
+
+    private final DbMetricsRecorder dbMetricsRecorder;
+
+    public MdcLoggingFilter(DbMetricsRecorder dbMetricsRecorder) {
+        this.dbMetricsRecorder = dbMetricsRecorder;
+    }
 
     @Override
     protected void doFilterInternal(
@@ -56,6 +63,11 @@ public class MdcLoggingFilter extends OncePerRequestFilter {
         } finally {
             long httpElapsedMs = System.currentTimeMillis() - startTime;
             DbQueryStatsContext.DbQueryStats stats = DbQueryStatsContext.snapshot();
+            String method = MDC.get("method");
+            String uri = MDC.get("uri");
+
+            dbMetricsRecorder.recordRequestDbTime(method, uri, stats.getTotalElapsedMs());
+            dbMetricsRecorder.recordRequestDbQueryCount(method, uri, stats.getQueryCount());
 
             log.info(
                     "event=http_request_db_summary status={} httpElapsedMs={} dbQueryCount={} dbTotalMs={}",
