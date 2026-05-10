@@ -32,6 +32,9 @@ scrape_configs:
       - target_label: 'job'
         replacement: 'api-server'
 
+      - target_label: 'app'
+        replacement: 'api-server'
+
       - source_labels: ['__meta_docker_container_id']
         target_label: '__path__'
         replacement: '/var/lib/docker/containers/$1/$1-json.log'

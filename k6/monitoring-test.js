@@ -18,7 +18,7 @@ export const options = {
   },
 };
 
-const BASE_URL = __ENV.BASE_URL || 'http://43.201.75.53:8080';
+const BASE_URL = __ENV.BASE_URL || 'http://43.201.75.53:8080/api';
 const TEST_RUN_ID = __ENV.TEST_RUN_ID || `monitoring-${Date.now()}`;
 const createDuration = new Trend('monitoring_create_duration');
 const countDuration = new Trend('monitoring_count_duration');
@@ -35,7 +35,7 @@ export default function () {
     name: `k6-${TEST_RUN_ID}-${__VU}-${__ITER}`,
   });
 
-  const createRes = http.post(`${BASE_URL}/api/monitoring/tests`, createPayload, {
+  const createRes = http.post(`${BASE_URL}/monitoring/tests`, createPayload, {
     headers,
     tags: {
       api: 'monitoring-create-test',
@@ -56,7 +56,7 @@ export default function () {
     },
   });
 
-  const countRes = http.get(`${BASE_URL}/api/monitoring/tests/count`, {
+  const countRes = http.get(`${BASE_URL}/monitoring/tests/count`, {
     headers,
     tags: {
       api: 'monitoring-count-test',
