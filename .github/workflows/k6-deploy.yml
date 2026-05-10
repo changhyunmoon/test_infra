@@ -1,0 +1,26 @@
+name: Deploy k6 Scripts
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'k6/**'
+      - '.github/workflows/k6-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Copy scripts to k6 EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.K6_SERVER_HOST }}
+          username: ${{ secrets.K6_SERVER_USER }}
+          key: ${{ secrets.K6_SERVER_KEY }}
+          source: "k6/*"
+          target: "/home/ubuntu/k6"
+          strip_components: 1
