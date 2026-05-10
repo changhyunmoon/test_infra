@@ -18,7 +18,7 @@ export const options = {
   },
 };
 
-const BASE_URL = __ENV.BASE_URL || 'http://43.201.75.53:8080/api';
+const BASE_URL = __ENV.BASE_URL || 'http://3.37.158.87:8080/api';
 const TEST_RUN_ID = __ENV.TEST_RUN_ID || `monitoring-${Date.now()}`;
 const createDuration = new Trend('monitoring_create_duration');
 const countDuration = new Trend('monitoring_count_duration');
