@@ -18,8 +18,8 @@ export const options = {
   },
 };
 
-const BASE_URL = __ENV.BASE_URL || 'http://3.37.158.87:8080/api';
-const TEST_RUN_ID = __ENV.TEST_RUN_ID || `monitoring-${Date.now()}`;
+const BASE_URL = 'http://3.37.158.87:8080/api';
+const TEST_RUN_ID =  `monitoring-1`;
 const createDuration = new Trend('monitoring_create_duration');
 const countDuration = new Trend('monitoring_count_duration');
 const apiSuccess = new Rate('monitoring_api_success');
@@ -39,6 +39,7 @@ export default function () {
     headers,
     tags: {
       api: 'monitoring-create-test',
+      testRunId: TEST_RUN_ID,
     },
   });
 
@@ -60,6 +61,7 @@ export default function () {
     headers,
     tags: {
       api: 'monitoring-count-test',
+      testRunId: TEST_RUN_ID,
     },
   });
 
