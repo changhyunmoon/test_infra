@@ -99,7 +99,6 @@ done
 
 # 6. Nginx 설정 전환
 log "4. Nginx 설정 교체 및 Reload..."
-# 이전에 만든 nginx-blue.conf 또는 nginx-green.conf를 적용
 sudo cp "$NGINX_DIR/nginx-${TARGET_COLOR}.conf" /etc/nginx/sites-available/default
 
 # Nginx 문법 검사 후 리로드
