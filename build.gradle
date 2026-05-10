@@ -25,6 +25,9 @@ dependencies {
 
     implementation "org.springframework.boot:spring-boot-starter-actuator"
     runtimeOnly "io.micrometer:micrometer-registry-prometheus"
+
+    runtimeOnly 'com.mysql:mysql-connector-j'
+    implementation 'net.ttddyy:datasource-proxy:1.11.0'
 }
 
 bootJar {

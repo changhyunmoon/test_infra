@@ -1,4 +1,4 @@
-package com.team6.project3th;
+package com.team6.project3th.common.healthcheck;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;

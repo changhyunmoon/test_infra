@@ -8,7 +8,7 @@
                     defaultValue="api-server"/>
 
     <property name="CONSOLE_LOG_PATTERN"
-              value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level ${APP_NAME} [%logger{36}] - %msg%n"/>
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level ${APP_NAME} testRunId=%X{testRunId:-} scenario=%X{scenario:-} requestId=%X{requestId:-} method=%X{method:-} uri=%X{uri:-} [%logger{36}] - %msg%n"/>
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
@@ -17,7 +17,12 @@
         </encoder>
     </appender>
 
+    <!--    끄고 싶으면 level을 OFF로-->
+    <logger name="SQL_LOG" level="INFO" additivity="true"/>
+    <logger name="HTTP_DB_SUMMARY" level="INFO" additivity="true"/>
+
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
     </root>
 </configuration>
+
