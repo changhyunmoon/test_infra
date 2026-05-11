@@ -52,6 +52,9 @@ fi
 
 # 2. Blue/Green 상태 결정
 # api-server-blue 컨테이너가 실행 중인지 확인
+log "Recreating Promtail so config file changes are applied."
+docker compose -f "$MONITORING_COMPOSE_FILE" up -d --force-recreate --no-deps promtail
+
 IS_BLUE=$(docker ps --filter "name=api-server-blue" --filter "status=running" -q)
 
 if [ -z "$IS_BLUE" ]; then

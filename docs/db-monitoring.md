@@ -1,203 +1,166 @@
-# 부하테스트용 DB 모니터링 문서
+# DB Monitoring
 
-## 목적
+이 문서는 DB 정보를 모니터링하기 위해 애플리케이션에 구현한 로그, 메트릭, 요청 추적 코드를 설명한다.
 
-이 문서는 k6 부하테스트 중 API별 DB 사용량을 관찰하기 위해 구현한 내용을 정리한다.
+## 목표
 
-목표는 API별로 다음 질문에 답할 수 있게 만드는 것이다.
+API 요청 단위로 다음 정보를 확인할 수 있게 한다.
 
-- 요청 1건당 SQL 쿼리가 몇 번 실행되는가?
-- SQL 실행시간은 얼마나 걸리는가?
-- API 응답시간 중 DB 시간이 어느 정도를 차지하는가?
-- 특정 k6 테스트 실행에서 발생한 SQL 로그를 어떻게 찾는가?
+| 정보 | 용도 |
+| --- | --- |
+| SQL 실행 로그 | 어떤 SQL이 실행됐는지 확인 |
+| 쿼리 1회 실행 시간 | 느린 쿼리 탐지 |
+| 요청당 DB 총 시간 | API 응답 지연 중 DB 영향도 확인 |
+| 요청당 DB 쿼리 수 | N+1 문제나 과도한 쿼리 탐지 |
+| testRunId/scenario/requestId | 부하 테스트와 운영 로그 추적 |
 
-## 모니터링 구성
+## 관련 파일
 
-현재 모니터링 구성은 다음과 같다.
+| 파일 | 역할 |
+| --- | --- |
+| `DataSourceProxyBeanPostProcessor.java` | Spring DataSource를 datasource-proxy로 감싸 SQL 실행 감지 |
+| `SqlLoggingListener.java` | SQL 실행 후 로그와 쿼리 단위 메트릭 기록 |
+| `DbQueryStatsContext.java` | 요청 단위 DB 쿼리 수와 총 DB 시간 누적 |
+| `MdcLoggingFilter.java` | 요청별 MDC 설정, 요청 종료 시 DB summary 기록 |
+| `DbMetricsRecorder.java` | Micrometer 메트릭 기록 |
+| `logback-spring.xml` | MDC 값을 포함한 로그 패턴 정의 |
+| `build.gradle` | Actuator, Prometheus registry, datasource-proxy 의존성 |
 
-- k6: 별도 EC2에서 부하 생성
-- Prometheus: 애플리케이션 메트릭 수집
-- Loki: 애플리케이션 로그와 SQL 로그 저장
-- Promtail: 로그 수집 및 Loki 전송
-- Grafana: 메트릭 대시보드와 로그 조회
-- Spring Boot Actuator + Micrometer: 애플리케이션 메트릭 노출
-- datasource-proxy: JDBC 쿼리 실행 감지
+## 의존성
 
-## 요청 추적 구조
+DB 모니터링은 다음 라이브러리를 사용한다.
 
-k6는 모든 요청에 테스트 실행 식별자를 헤더로 전달한다.
-
-권장 헤더:
-
-```http
-X-Test-Run-Id: load-20260510-001
-X-Scenario: read-orders
-X-Request-Id: optional-client-request-id
+```gradle
+implementation "org.springframework.boot:spring-boot-starter-actuator"
+runtimeOnly "io.micrometer:micrometer-registry-prometheus"
+implementation 'net.ttddyy:datasource-proxy:1.11.0'
 ```
 
-k6 예시:
+| 라이브러리 | 역할 |
+| --- | --- |
+| Spring Boot Actuator | `/actuator/prometheus` 계열 endpoint 제공 |
+| Micrometer Prometheus registry | Micrometer 메트릭을 Prometheus 형식으로 노출 |
+| datasource-proxy | JDBC DataSource를 감싸 SQL 실행 이벤트 감지 |
 
-```javascript
-import http from 'k6/http';
+## 요청 추적: MDC
 
-const TEST_RUN_ID = __ENV.TEST_RUN_ID || 'local-load-test';
+`MdcLoggingFilter`는 모든 HTTP 요청마다 다음 값을 MDC에 저장한다.
 
-export default function () {
-  http.get('https://example.com/api/orders', {
-    headers: {
-      'X-Test-Run-Id': TEST_RUN_ID,
-      'X-Scenario': 'read-orders',
-    },
-  });
-}
-```
+| MDC key | 값 |
+| --- | --- |
+| `testRunId` | 요청 헤더 `X-Test-Run-Id`, 없으면 `-` |
+| `scenario` | 요청 헤더 `X-Scenario`, 없으면 `-` |
+| `requestId` | 요청 헤더 `X-Request-Id`, 없으면 UUID 생성 |
+| `method` | HTTP method |
+| `uri` | request URI |
 
-애플리케이션은 요청이 들어오면 다음 값을 MDC에 저장한다.
-
-- `testRunId`
-- `scenario`
-- `requestId`
-- `method`
-- `uri`
-
-이 값들은 Logback 패턴에 포함되어 모든 애플리케이션 로그에 자동으로 출력된다.
-
-관련 파일:
-
-- `src/main/java/com/team6/project3th/common/logging/MdcLoggingFilter.java`
-- `src/main/resources/logback-spring.xml`
-
-## SQL 실행시간 로그
-
-`datasource-proxy`를 사용해 Spring Boot가 사용하는 `DataSource`를 감싼다.
-
-이를 통해 애플리케이션에서 실행되는 JDBC 쿼리를 감지하고, 쿼리 실행 후 SQL 실행시간을 로그로 남긴다.
-
-관련 파일:
-
-- `src/main/java/com/team6/project3th/common/config/DataSourceProxyBeanPostProcessor.java`
-- `src/main/java/com/team6/project3th/common/logging/SqlLoggingListener.java`
-
-SQL 실행 시 다음과 같은 로그가 남는다.
-
-```text
-event=db_query datasource=mysqlDataSource elapsedMs=18 success=true querySize=1 sql="select ..."
-```
-
-Logback 패턴에 MDC 값이 포함되어 있으므로 실제 로그에는 다음 값들도 함께 찍힌다.
-
-```text
-testRunId=... scenario=... requestId=... method=... uri=...
-```
-
-따라서 Loki에서 특정 부하테스트 실행 ID나 특정 API 기준으로 SQL 로그를 찾을 수 있다.
-
-SQL 로그 레벨은 별도로 제어할 수 있다.
+이 값들은 `logback-spring.xml`의 콘솔 로그 패턴에 포함된다.
 
 ```xml
-<logger name="SQL_LOG" level="INFO" additivity="true"/>
+testRunId=%X{testRunId:-}
+scenario=%X{scenario:-}
+requestId=%X{requestId:-}
+method=%X{method:-}
+uri=%X{uri:-}
 ```
 
-SQL 로그를 끄고 싶으면 `level`을 `OFF`로 변경한다.
+그래서 애플리케이션 로그, SQL 로그, 요청 요약 로그가 같은 `requestId`와 `testRunId`로 연결된다.
 
-## 요청별 DB 요약 로그
+## SQL 실행 감지
 
-SQL 실행 로그는 쿼리 단위 로그다.
+`DataSourceProxyBeanPostProcessor`는 Spring이 초기화한 `dataSource` bean을 프록시로 감싼다.
 
-하지만 부하테스트에서는 요청 1건이 DB를 얼마나 사용했는지도 중요하다.
+```java
+return ProxyDataSourceBuilder
+        .create(dataSource)
+        .name("mysqlDataSource")
+        .listener(sqlLoggingListenerProvider.getObject())
+        .countQuery()
+        .build();
+```
 
-이를 위해 요청 처리 중 실행된 DB 쿼리 수와 총 DB 실행시간을 `ThreadLocal`에 누적한다.
+이후 JPA나 JDBC가 DB 쿼리를 실행하면 `SqlLoggingListener.afterQuery()`가 호출된다.
 
-관련 파일:
+## SQL 로그
 
-- `src/main/java/com/team6/project3th/common/logging/DbQueryStatsContext.java`
-- `src/main/java/com/team6/project3th/common/logging/MdcLoggingFilter.java`
+`SqlLoggingListener`는 쿼리 실행 후 다음 로그를 남긴다.
 
-요청이 끝나면 다음과 같은 요약 로그를 남긴다.
+```text
+event=db_query datasource=... elapsedMs=... success=... querySize=... sql="..."
+```
+
+로거 이름은 `SQL_LOG`다.
+
+```java
+private static final Logger log = LoggerFactory.getLogger("SQL_LOG");
+```
+
+`normalizeSql()`은 SQL의 줄바꿈과 여러 공백을 하나의 공백으로 정리해 로그를 한 줄로 만든다.
+
+## 요청별 DB summary 로그
+
+`MdcLoggingFilter`는 요청이 끝날 때 `DbQueryStatsContext`에서 누적 값을 꺼내 summary 로그를 남긴다.
 
 ```text
 event=http_request_db_summary status=200 httpElapsedMs=91 dbQueryCount=2 dbTotalMs=30
 ```
 
-각 값의 의미는 다음과 같다.
+로거 이름은 `HTTP_DB_SUMMARY`다.
 
-- `httpElapsedMs`: 서버 내부에서 요청을 처리하는 데 걸린 전체 시간
-- `dbQueryCount`: 해당 요청 중 실행된 JDBC 쿼리 수
-- `dbTotalMs`: 해당 요청 중 JDBC 실행에 사용된 총 시간
+이 로그는 API 요청 하나의 전체 처리 시간, DB 쿼리 수, DB 총 실행 시간을 함께 보여준다.
 
-요약 로그는 Loki에서 API별 DB 비용을 빠르게 확인할 때 유용하다.
+## ThreadLocal 통계 저장
 
-요청별 DB 요약 로그도 별도로 레벨을 제어할 수 있다.
+`DbQueryStatsContext`는 `ThreadLocal`에 요청 단위 DB 통계를 저장한다.
 
-```xml
-<logger name="HTTP_DB_SUMMARY" level="INFO" additivity="true"/>
+```java
+private static final ThreadLocal<DbQueryStats> CONTEXT =
+        ThreadLocal.withInitial(DbQueryStats::new);
 ```
 
-## Prometheus 메트릭
+쿼리 하나가 끝날 때마다 다음 값이 증가한다.
 
-DB 관련 지표는 Micrometer custom metric으로 Prometheus에 노출한다.
+```java
+stats.queryCount++;
+stats.totalElapsedMs += elapsedMs;
+```
 
-관련 파일:
+요청 종료 후에는 반드시 정리한다.
 
-- `src/main/java/com/team6/project3th/common/metrics/DbMetricsRecorder.java`
-- `src/main/java/com/team6/project3th/common/logging/SqlLoggingListener.java`
-- `src/main/java/com/team6/project3th/common/logging/MdcLoggingFilter.java`
+```java
+DbQueryStatsContext.clear();
+MDC.clear();
+```
 
-수집하는 메트릭은 다음과 같다.
+Spring MVC 요청 처리 스레드는 재사용되므로, 정리하지 않으면 다음 요청 로그에 이전 요청의 MDC나 DB 통계가 섞일 수 있다.
 
-| 메트릭 | 설명 |
-| --- | --- |
-| `app_db_query_duration_seconds` | JDBC 쿼리 1회 실행시간 |
-| `app_http_request_db_time_seconds` | HTTP 요청 1건당 DB 총 실행시간 |
-| `app_http_request_db_query_count` | HTTP 요청 1건당 DB 쿼리 수 |
+## Micrometer 메트릭
 
-사용하는 label은 다음과 같다.
+`DbMetricsRecorder`는 세 가지 메트릭을 기록한다.
 
-| Label | 설명 |
+| 메트릭 이름 | Prometheus 노출 예 | 설명 |
+| --- | --- | --- |
+| `app_db_query_duration` | `app_db_query_duration_seconds` | SQL 쿼리 1회 실행 시간 |
+| `app_http_request_db_time` | `app_http_request_db_time_seconds` | HTTP 요청 1건당 DB 총 시간 |
+| `app_http_request_db_query_count` | `app_http_request_db_query_count` | HTTP 요청 1건당 DB 쿼리 수 |
+
+쿼리 1회 실행 시간에는 `success` 태그가 포함된다.
+
+```java
+.tag("success", String.valueOf(success))
+```
+
+공통 태그:
+
+| 태그 | 설명 |
 | --- | --- |
 | `method` | HTTP method |
-| `uri` | 요청 URI |
-| `success` | 쿼리 성공 여부. `app_db_query_duration_seconds`에만 사용 |
+| `uri` | request URI |
+| `success` | 쿼리 성공 여부, `app_db_query_duration`에만 사용 |
 
-Prometheus label에는 SQL 원문, userId, orderId, token 같은 동적 값이나 민감정보를 넣지 않는다.
+## Prometheus 쿼리 예시
 
-이런 값은 cardinality를 급격히 늘려 Prometheus 성능 문제를 만들 수 있다.
-
-SQL 원문은 Prometheus가 아니라 Loki 로그에서 확인한다.
-
-## 운영 프로필 설정
-
-운영 환경 설정은 다음 파일에 있다.
-
-```text
-src/main/resources/application-prod.yml
-```
-
-중요 설정:
-
-```yaml
-server:
-  servlet:
-    context-path: /api
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,prometheus
-```
-
-운영 환경에서는 모든 API 앞에 `/api`가 붙는다.
-
-따라서 Prometheus scrape 경로는 다음과 같다.
-
-```text
-/api/actuator/prometheus
-```
-
-## Grafana에서 사용할 PromQL 예시
-
-API별 요청당 DB 총 시간 p95:
+API별 요청당 DB 시간 p95:
 
 ```promql
 histogram_quantile(
@@ -206,7 +169,7 @@ histogram_quantile(
 )
 ```
 
-API별 요청당 평균 쿼리 수:
+API별 요청당 평균 DB 쿼리 수:
 
 ```promql
 sum(rate(app_http_request_db_query_count_sum[5m])) by (method, uri)
@@ -214,7 +177,7 @@ sum(rate(app_http_request_db_query_count_sum[5m])) by (method, uri)
 sum(rate(app_http_request_db_query_count_count[5m])) by (method, uri)
 ```
 
-API별 SQL 실행시간 p95:
+쿼리 1회 실행 시간 p95:
 
 ```promql
 histogram_quantile(
@@ -223,80 +186,47 @@ histogram_quantile(
 )
 ```
 
-API별 SQL 실행 횟수:
+API별 쿼리 실행 횟수:
 
 ```promql
 sum(rate(app_db_query_duration_seconds_count[1m])) by (method, uri)
 ```
 
-API 응답시간 중 DB 시간이 차지하는 비율:
+## Loki 쿼리 예시
 
-```promql
-(
-  sum(rate(app_http_request_db_time_seconds_sum[5m])) by (method, uri)
-  /
-  sum(rate(app_http_request_db_time_seconds_count[5m])) by (method, uri)
-)
-/
-(
-  sum(rate(http_server_requests_seconds_sum[5m])) by (method, uri)
-  /
-  sum(rate(http_server_requests_seconds_count[5m])) by (method, uri)
-)
-* 100
-```
-
-## Loki에서 사용할 LogQL 예시
-
-요청별 DB 요약 로그 조회:
+요청별 DB summary:
 
 ```logql
 {app="api-server"} |= "event=http_request_db_summary"
 ```
 
-SQL 실행 로그 조회:
+SQL 로그:
 
 ```logql
 {app="api-server"} |= "event=db_query"
 ```
 
-특정 k6 테스트 실행 로그 조회:
+특정 테스트 실행:
 
 ```logql
-{app="api-server"} |= "testRunId=load-20260510-001"
+{app="api-server"} |= "testRunId=monitoring-1"
 ```
 
-특정 API 로그 조회:
+특정 API:
 
 ```logql
-{app="api-server"} |= "uri=/api/orders"
+{app="api-server"} |= "uri=/api/monitoring/tests"
 ```
 
-## 배포 후 검증 체크리스트
+## 테스트 요청
 
-1. 애플리케이션을 `prod` 프로필로 배포한다.
-2. DB를 사용하는 API를 호출한다.
-3. k6 또는 curl 요청에 `X-Test-Run-Id` 헤더를 포함한다.
-4. 애플리케이션 로그에서 `event=db_query`가 찍히는지 확인한다.
-5. 애플리케이션 로그에서 `event=http_request_db_summary`가 찍히는지 확인한다.
-6. `/api/actuator/prometheus`에 접속한다.
-7. 다음 메트릭이 노출되는지 확인한다.
+`X-Test-Run-Id`를 넣으면 로그에서 해당 테스트 실행을 추적할 수 있다.
 
-```text
-app_db_query_duration_seconds_bucket
-app_http_request_db_time_seconds_bucket
-app_http_request_db_query_count_bucket
+```bash
+curl -H "X-Test-Run-Id: monitoring-1" \
+     -H "X-Scenario: manual-check" \
+     http://localhost:8080/api/health
 ```
 
-8. Prometheus target이 정상 scrape 상태인지 확인한다.
-9. Grafana에서 Prometheus 메트릭과 Loki 로그가 모두 조회되는지 확인한다.
+헤더가 없으면 `testRunId=-`로 기록된다.
 
-## 주의사항
-
-- 현재 구현은 일반적인 Spring MVC 동기 요청 처리에 가장 잘 맞는다.
-- `ThreadLocal` 기반 요청별 DB 집계는 `@Async`, 별도 스레드, 이벤트 리스너, WebFlux 환경에서는 자동으로 이어지지 않는다.
-- SQL 원문은 Loki 로그에만 남기고 Prometheus label에는 넣지 않는다.
-- Prometheus label은 cardinality가 낮은 값만 사용한다.
-- 현재 `uri`는 `request.getRequestURI()` 값을 사용한다.
-- `/orders/1`, `/orders/2`처럼 동적 path가 많아지면 Prometheus cardinality 문제가 생길 수 있다.
-- 필요하면 Spring MVC의 best matching pattern을 사용해 `/orders/{id}` 형태로 metric label을 바꾸는 개선이 필요하다.
