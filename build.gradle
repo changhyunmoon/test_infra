@@ -29,7 +29,7 @@ dependencies {
 
     runtimeOnly 'com.mysql:mysql-connector-j'
 
-    implementation 'com.github.gavlyukovskiy:datasource-proxy-spring-boot-starter'
+    implementation 'net.ttddyy:datasource-proxy:1.11.0'
 }
 
 bootJar {
