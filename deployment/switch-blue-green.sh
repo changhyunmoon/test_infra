@@ -117,7 +117,7 @@ else
     exit 1
 fi
 
-ENTRY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:$ENTRY_PORT/health || true)
+ENTRY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:$ENTRY_PORT/api/health || true)
 if [ "$ENTRY_STATUS" -ne 200 ]; then
     log "❌ Nginx 전환 후 진입점 헬스체크 실패. 이전 설정으로 롤백합니다. (status=$ENTRY_STATUS)"
     sudo cp "$NGINX_DIR/nginx-${OLD_COLOR}.conf" /etc/nginx/sites-available/default
@@ -126,7 +126,7 @@ if [ "$ENTRY_STATUS" -ne 200 ]; then
     exit 1
 fi
 
-log "✅ 진입점 헬스체크 성공! (http://127.0.0.1:$ENTRY_PORT/health)"
+log "✅ 진입점 헬스체크 성공! (http://127.0.0.1:$ENTRY_PORT/api/health)"
 
 # 7. 이전 컨테이너 정리
 log "5. 이전 컨테이너($OLD_COLOR) 정리..."
