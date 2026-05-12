@@ -49,6 +49,16 @@ public class QueryMetricsListener implements QueryExecutionListener {
                 .register(meterRegistry)
                 .record(elapsedTimeMs, TimeUnit.MILLISECONDS);
 
+        for (QueryInfo queryInfo : queryInfoList) {
+            log.info(
+                    "event=db_query method={}, uri={}, elapsedMs={}, query={}",
+                    method,
+                    uri,
+                    elapsedTimeMs,
+                    queryInfo.getQuery()
+            );
+        }
+
         if (elapsedTimeMs >= SLOW_QUERY_THRESHOLD_MS) {
             for (QueryInfo queryInfo : queryInfoList) {
                 log.warn(

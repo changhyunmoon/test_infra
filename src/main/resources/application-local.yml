@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: api-server
+
+  datasource:
+    url: ${LOCAL_DB_URL:jdbc:mysql://localhost:3306/Infra?serverTimezone=Asia/Seoul&characterEncoding=UTF-8}
+    username: ${LOCAL_DB_USERNAME:root}
+    password: ${LOCAL_DB_PASSWORD:ansckdgus1!}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: false
+    open-in-view: false
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus, metrics
+      base-path: /actuator
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        db.query.time: true
+  endpoint:
+    health:
+      show-details: always
