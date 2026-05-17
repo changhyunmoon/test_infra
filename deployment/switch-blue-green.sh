@@ -26,7 +26,7 @@ log() {
     echo -e "[$(date +"%Y-%m-%d %T")] $1"
 }
 
-log "🚀 --- 무중단 배포 프로세스 시작 (Tag: $DOCKER_IMAGE_TAG) ---"
+log "🚀 --- 무중단 배포 프로세스 시작! (Tag: $DOCKER_IMAGE_TAG) ---"
 
 if ! docker network inspect "$NETWORK_NAME" >/dev/null 2>&1; then
     log "Docker network '$NETWORK_NAME' 없음. 새로 생성합니다."
